@@ -1,0 +1,30 @@
+package Saturday;
+
+import java.lang.reflect.Array;
+import java.util.ArrayList;
+
+public class UserDefineArrayList {
+int a ;
+int b;
+
+ UserDefineArrayList(int a,int b) {
+	 this.a=a;
+	 this.b=b;
+	 
+	// TODO Auto-generated constructor stub
+}
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+		UserDefineArrayList userDefineArrayList = new UserDefineArrayList(3, 3);
+		UserDefineArrayList userDefineArrayList1 = new UserDefineArrayList(3, 3);
+		UserDefineArrayList userDefineArrayList2 = new UserDefineArrayList(3, 3);
+		UserDefineArrayList userDefineArrayList3 = new UserDefineArrayList(3, 3);
+		
+		//cretaing array and itrate value and print result.
+		ArrayList<String> list = new ArrayList<String> ();
+		list.add(userDefineArrayList);
+
+	}
+
+
+}

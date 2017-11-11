@@ -1,0 +1,107 @@
+package com.ios.testController;
+
+import org.testng.Assert;
+import org.testng.annotations.BeforeSuite;
+
+import com.EggDrive.EggDriveException;
+import com.InitializeEnvironment.InitializeSetup;
+import com.InitializeEnvironment.SikuliConnection;
+import com.Reports.IOSReport;
+import com.commonLibraries.AppiumReporter;
+import com.commonLibraries.SikuliActions;
+
+public class SikuliTestController {
+	SikuliActions actions;
+	
+	@BeforeSuite()
+	public void beforeSuite() 
+	{
+		actions=new SikuliActions();
+
+		/*String SuiteDisplayName = System.getProperty("SuiteDisplayName");
+		String platform = System.getProperty("platform");
+		String deviceProfile = System.getProperty("deviceProfile");
+		String connectionHost = System.getProperty("connectionHost");
+		String customer = System.getProperty("customer");
+		String recipientList = System.getProperty("recipientList");	*/	
+
+		Assert.assertNotNull(System.getProperty("SuiteDisplayName"), "SuiteDisplayName cannot be null");
+		Assert.assertNotNull(System.getProperty("platform"), "platform cannot be null");
+		Assert.assertNotNull(System.getProperty("deviceProfile"), "deviceProfile cannot be null");
+		Assert.assertNotNull(System.getProperty("connectionHost"), "connectionHost cannot be null");
+		Assert.assertNotNull(System.getProperty("customer"), "customer cannot be null");
+
+		if(System.getProperty("recipientList") == null){
+			AppiumReporter.logWarning("Recipient List is null. The email would not be sent");
+		}		
+
+		/*String templateFilePath = "Reports/Template - iOS Sanity.html";
+		String configXMLPath = System.getProperty("platform")+"/Suites/"+"Config.xml";
+		String deviceProfilePath = System.getProperty("platform")+"/DeviceProfiles/"+System.getProperty("deviceProfile")+".xml";
+		String servicePath = "CustomerProfiles/ServicePath.xml";
+		String customerProfilePath = "CustomerProfiles/"+System.getProperty("platform")+"/"+customer+".xml";
+
+
+		templateFilePath = System.getProperty("platform") + "/TestReports/Template - iOS Sanity.html";
+		deviceProfilePath = System.getProperty("platform") + "/DeviceProfiles/"+System.getProperty("deviceProfile")+".xml";
+		customerProfilePath = System.getProperty("platform") + "/CustomerProfiles/"+customer+".xml";		
+		servicePath = System.getProperty("platform") + "/CustomerProfiles/ServicePath.xml";*/
+
+
+		InitializeSetup.baseDir=System.getProperty("user.dir");
+		InitializeSetup.setSuiteName(System.getProperty("SuiteDisplayName"));
+		InitializeSetup.setSuiteName(System.getProperty("SuiteDisplayName"));
+		InitializeSetup.getProperties(System.getProperty("platform")+"/Suites/"+"Config.xml");
+		InitializeSetup.getProperties(System.getProperty("platform")+"/DeviceProfiles/"+System.getProperty("deviceProfile")+".xml");
+		InitializeSetup.getProperties("CustomerProfiles/"+System.getProperty("platform")+"/"+System.getProperty("customer")+".xml");
+		InitializeSetup.getProperties(System.getProperty("platform") + "/CustomerProfiles/ServicePath.xml");
+		InitializeSetup.properties.put("customerType",System.getProperty("customer"));
+		InitializeSetup.properties.put("recipientList",System.getProperty("recipientList"));
+		InitializeSetup.properties.put("captureScreen","true");
+		InitializeSetup.setImagesDirectory();
+
+		InitializeSetup.properties.put("appSource","MaaS360_" + InitializeSetup.properties.get("appVersion") + ".ipa");
+		InitializeSetup.properties.put("appDetails","MaaS360_" + InitializeSetup.properties.get("appVersion") + ".xml");
+
+		String customerDataPath = System.getProperty("platform") + "/CustomerData/CustomerData_" + InitializeSetup.properties.get("customerLoginName") + ".properties";
+		InitializeSetup.fetchCustomerData(customerDataPath);			
+
+		if(InitializeSetup.properties.get("platform").equalsIgnoreCase("ios"))
+		{
+			InitializeSetup.report=new IOSReport(System.getProperty("platform") + "/TestReports/Template - iOS Sanity.html", "12");
+		}
+		
+		Assert.assertEquals(new SikuliConnection().startVNC(System.getProperty("connectionHost")),true);
+		
+		//Assert.assertEquals(SikuliConnection.connectDevice("127.0.0.1",connectionHost,5400, "1"),true);		
+
+		//actions.execute("SetOption MouseClickDelay, .1\nSetOption KeyDownDelay, 0.1\nSetOption NextKeyDelay, 0.1");
+	}
+
+	//@BeforeSuite()
+	public void beforeSuiteEndToEnd() throws Exception 
+	{
+		InitializeSetup.properties.put("isAgentExecutionCompleted", "false");
+		String SuiteDisplayName=System.getProperty("SuiteDisplayName");
+		String className = System.getProperty("className");
+		String platform = System.getProperty("platform");
+		String deviceProfile = System.getProperty("deviceProfile");
+		String customer = System.getProperty("customer");
+
+		InitializeSetup.baseDir=System.getProperty("user.dir");
+		InitializeSetup.baseDir = InitializeSetup.baseDir.replace("%20", " ");
+		InitializeSetup.setSuiteName(SuiteDisplayName);
+		InitializeSetup.setClassName(className);
+		InitializeSetup.getProperties(platform+"/Suites/"+"Config.xml");
+		InitializeSetup.getProperties("DeviceProfiles/"+deviceProfile+".xml");
+		InitializeSetup.getProperties("CustomerProfiles/"+platform+"/"+customer+".xml");
+		InitializeSetup.getProperties("CustomerProfiles/ServicePath.xml");
+		InitializeSetup.properties.put("customerType",customer);
+		InitializeSetup.properties.put("captureScreen","true");
+		InitializeSetup.setImagesDirectory();
+
+
+		String customerDataPath = InitializeSetup.baseDir + "/" + platform + "/CustomerData/CustomerData_" + InitializeSetup.properties.get("customerLoginName") + ".properties";
+		InitializeSetup.fetchCustomerData(customerDataPath);		
+	}
+}

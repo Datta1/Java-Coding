@@ -1,0 +1,12 @@
+package Day2;
+java.util.StringBuffer;
+public class ReverseString {
+
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+		
+		new StringBuilder(hi).reverse().toString()
+
+	}
+
+}

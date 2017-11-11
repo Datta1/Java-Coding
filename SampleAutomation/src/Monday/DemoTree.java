@@ -1,0 +1,28 @@
+package Monday;
+import java.util.*;
+//import java.util.ArrayList;
+//import java.util.ListIterator;
+//import java.util.TreeSet;
+
+//import com.gargoylesoftware.htmlunit.javascript.host.Iterator;
+
+public class DemoTree {
+
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+		
+		TreeSet<String> list = new TreeSet<String> ();
+		list.add("datta");
+		list.add("kolekar");
+		list.add("datta1");
+		list.add("datta2");
+		list.add("datta2");
+		list.add("datta");
+		
+		
+		Iterator <String>itr = list.iterator();
+		while (itr.hasNext()) {
+			System.out.println(itr.next());
+			}
+	}
+}

@@ -1,0 +1,104 @@
+package com.ios.testController;
+
+import org.testng.Assert;
+import org.testng.annotations.BeforeSuite;
+
+import com.EggDrive.EggDriveException;
+import com.InitializeEnvironment.InitializeSetup;
+import com.Reports.IOSReport;
+import com.commonLibraries.AppiumReporter;
+
+//@Test(groups = { "TestGroup" })
+public class TestController {
+//	Actions actions;
+	
+	@BeforeSuite()
+	public void beforeSuite() 
+	{
+		String SuiteDisplayName = System.getProperty("SuiteDisplayName");
+		String platform = System.getProperty("platform");
+		String deviceProfile = System.getProperty("deviceProfile");
+		String connectionHost = System.getProperty("connectionHost");
+		String customer = System.getProperty("customer");
+		String recipientList = System.getProperty("recipientList");		
+
+		Assert.assertNotNull(SuiteDisplayName, "SuiteDisplayName cannot be null");
+		Assert.assertNotNull(platform, "platform cannot be null");
+		Assert.assertNotNull(deviceProfile, "deviceProfile cannot be null");
+		Assert.assertNotNull(connectionHost, "connectionHost cannot be null");
+		Assert.assertNotNull(customer, "customer cannot be null");
+
+		if(recipientList == null){
+			AppiumReporter.logWarning("Recipient List is null. The email would not be sent");
+		}		
+
+		String templateFilePath = "Reports/Template - iOS Sanity.html";
+
+		String configXMLPath = platform+"/Suites/"+"Config.xml";
+		String deviceProfilePath = "DeviceProfiles/"+deviceProfile+".xml";
+		String servicePath = "CustomerProfiles/ServicePath.xml";
+		String customerProfilePath = "CustomerProfiles/"+platform+"/"+customer+".xml";
+
+
+		templateFilePath = platform + "/TestReports/Template - iOS Sanity.html";
+		deviceProfilePath = platform + "/DeviceProfiles/"+deviceProfile+".xml";
+		customerProfilePath = platform + "/CustomerProfiles/"+customer+".xml";		
+		servicePath = platform + "/CustomerProfiles/ServicePath.xml";
+
+
+		InitializeSetup.baseDir=System.getProperty("user.dir");
+		InitializeSetup.setSuiteName(SuiteDisplayName);
+		InitializeSetup.setSuiteName(System.getProperty("SuiteDisplayName"));
+		InitializeSetup.getProperties(configXMLPath);
+		InitializeSetup.getProperties(deviceProfilePath);
+		InitializeSetup.getProperties(customerProfilePath);
+		InitializeSetup.getProperties(servicePath);
+		InitializeSetup.properties.put("customerType",customer);
+		InitializeSetup.properties.put("recipientList",recipientList);
+		InitializeSetup.properties.put("captureScreen","true");
+		InitializeSetup.setImagesDirectory();
+
+		InitializeSetup.properties.put("appSource","MaaS360_" + InitializeSetup.properties.get("appVersion") + ".ipa");
+		InitializeSetup.properties.put("appDetails","MaaS360_" + InitializeSetup.properties.get("appVersion") + ".xml");
+
+		String customerDataPath = platform + "/CustomerData/CustomerData_" + InitializeSetup.properties.get("customerLoginName") + ".properties";
+		InitializeSetup.fetchCustomerData(customerDataPath);			
+
+		if(InitializeSetup.properties.get("platform").equalsIgnoreCase("ios"))
+		{
+			InitializeSetup.report=new IOSReport(templateFilePath, "12");
+		}
+	}
+
+	//@BeforeSuite()
+	public void beforeSuiteEndToEnd() throws EggDriveException 
+	{
+		InitializeSetup.properties.put("isAgentExecutionCompleted", "false");
+		String SuiteDisplayName=System.getProperty("SuiteDisplayName");
+		String className = System.getProperty("className");
+		String platform = System.getProperty("platform");
+		String deviceProfile = System.getProperty("deviceProfile");
+		String customer = System.getProperty("customer");
+
+		InitializeSetup.baseDir=System.getProperty("user.dir");
+		InitializeSetup.baseDir = InitializeSetup.baseDir.replace("%20", " ");
+		InitializeSetup.setSuiteName(SuiteDisplayName);
+		InitializeSetup.setClassName(className);
+		InitializeSetup.getProperties(platform+"/Suites/"+"Config.xml");
+		InitializeSetup.getProperties("DeviceProfiles/"+deviceProfile+".xml");
+		InitializeSetup.getProperties("CustomerProfiles/"+platform+"/"+customer+".xml");
+		InitializeSetup.getProperties("CustomerProfiles/ServicePath.xml");
+		InitializeSetup.properties.put("customerType",customer);
+		InitializeSetup.properties.put("captureScreen","true");
+		InitializeSetup.setImagesDirectory();
+
+
+		String customerDataPath = InitializeSetup.baseDir + "/" + platform + "/CustomerData/CustomerData_" + InitializeSetup.properties.get("customerLoginName") + ".properties";
+		InitializeSetup.fetchCustomerData(customerDataPath);		
+
+		if(InitializeSetup.properties.get("platform").equalsIgnoreCase("ios"))
+		{
+			InitializeSetup.report=new IOSReport(InitializeSetup.baseDir + "/Reports/Template - iOS Sanity.html", "12");
+		}
+	}
+}

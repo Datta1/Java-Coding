@@ -1,0 +1,24 @@
+package AllLinktext;
+
+import org.openqa.selenium.By;
+import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.firefox.FirefoxDriver;
+
+public class Commands {
+
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub'
+		//lunch chrome
+		System.setProperty ("webdriver.chrome.driver" , "C:\\Users\\DattaKolekar\\Desktop\\eclipeseAndJava\\chromedriver.exe" );
+		ChromeDriver driver = new ChromeDriver();
+		driver.get("https://iq1portal.fiberlink.com/");
+		driver.manage().window().maximize();
+ //operation
+		
+		driver.findElement(By.linkText("Support@maas360.ibm.com")).click();
+		System.out.println("done");
+		
+
+	}
+
+}

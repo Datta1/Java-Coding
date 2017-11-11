@@ -1,0 +1,12 @@
+package Saturday;
+
+public class List {
+	
+Integer[] name = new Integer[] {1,2,3,4};
+
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+
+	}
+
+}

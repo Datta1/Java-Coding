@@ -1,0 +1,38 @@
+package automationFramework;
+import java.io.File;
+import java.io.FileInputStream;
+
+import jxl.Cell;
+import jxl.Sheet;
+import jxl.Workbook;
+
+
+
+public class ReadDatta {
+	
+	public static void main(String args[])
+	{
+	String FilePath = "C://Datta//Book1.xlsx";
+	FileInputStream fs = new FileInputStream(FilePath);
+	Workbook wb = Workbook.getWorkbook(fs);
+		
+	
+	
+	 wb = Workbook.getWorkbook(new File("Filepath"));
+	 Sheet sh = wb.getSheet(0);
+	 sh = wb.getSheet(1);
+	 sh = wb.getSheet("sheet1");
+	 
+	 String CellGetContent = sh.getCell(0,0).getContents();
+	 System.out.println(CellGetContent);
+	 System.out.println(sh.getCell(0,0).getContents());
+	 
+	 Cell Row0Col0 = sh.getCell(0,0);
+	 Cell Row1Col1 = sh.getCell(1,1);
+	 String FirstRowFirstColumn = Row0Col0.getContents();
+	 String SecondRowSecondColumn = Row1Col1.getContents();
+	
+	}	
+	
+	
+}	

@@ -1,0 +1,25 @@
+package Sunday;
+import java.util.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+
+public class DemoHash {
+
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+		
+		ArrayList<String> list = new ArrayList<String> ();
+		list.add("datta");
+		list.add("kolekar");
+		list.add("datta1");
+		list.add("datta2");
+		list.add("datta2");
+		list.add("datta");
+		
+		
+		ListIterator <String>itr = list.listIterator();
+		while (itr.hasNext()) {
+			System.out.println(itr.next());
+			}
+	}
+}

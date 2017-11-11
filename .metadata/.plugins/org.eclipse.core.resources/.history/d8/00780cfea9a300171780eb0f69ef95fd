@@ -1,0 +1,22 @@
+import java.sql.Driver;
+import java.sql.DriverAction;
+
+import org.openqa.selenium.By;
+
+public class Owner_Details extends Driver_basic_details{
+
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+		
+		// Owner name 
+		Driver.findElement(By.id("id")).sendKeys("Driver Name");
+		
+		DriverAction.findElement(By.id("id")).sendKeys("Driver Name");
+		
+		driver.findElement(By.id("id")).sendKeys("Driver Name");
+		
+		Driver.findElement(By.id("id")).sendKeys("Driver Name");
+
+	}
+
+}

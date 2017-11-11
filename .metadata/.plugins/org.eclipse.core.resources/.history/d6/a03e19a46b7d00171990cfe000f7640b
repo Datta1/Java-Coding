@@ -1,0 +1,23 @@
+package Day3;
+
+import java.awt.Rectangle;
+
+public class Sample {
+
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+		
+			 
+			  Rectangle r1 = new Rectangle(); 
+			 
+			     
+			  System.out.println("Before Function Length : " + r1.length); 
+			 
+			  r1.setLength(20);   System.out.println("After Function Length : " + r1.length); 
+			 
+			  } 
+			
+
+	}
+
+

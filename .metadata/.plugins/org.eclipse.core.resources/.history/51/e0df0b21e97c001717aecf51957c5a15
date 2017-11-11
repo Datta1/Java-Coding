@@ -1,0 +1,18 @@
+package Day2;
+
+public class Factorial {
+
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+		int a = 0;
+		if (a<0) {
+			System.out.println("this is an negative number good to go for factorial");
+			
+		}
+		else {
+			System.out.println("positive number");
+		}
+
+	}
+
+}

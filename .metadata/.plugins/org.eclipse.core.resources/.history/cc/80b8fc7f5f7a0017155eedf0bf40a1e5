@@ -1,0 +1,45 @@
+package automationFramework;
+	import org.openqa.selenium.By;
+	import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
+import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.firefox.FirefoxDriver;
+public class Navigation_Link {
+	public static void main(String[] args) throws Exception {
+		// Create a new instance of the FireFox driver
+		System.setProperty ("webdriver.chrome.driver" , "C:\\Users\\DattaKolekar\\Desktop\\eclipeseAndJava\\chromedriver.exe" );
+		ChromeDriver driver = new ChromeDriver();
+		driver.manage().window().maximize();
+ 
+		// Open ToolsQA web site
+		String appUrl = "https://staging.maas360.com/";
+		driver.get(appUrl);
+ 
+		// Click on Registration link
+		WebElement e = driver.findElement(By.xpath("//*[@id=\"EMail\"]")).sendKeys("datta");
+		
+		WebElement element = driver.findElement(By.name("EMail"));
+		element.sendKeys("datta");
+		element.clear();
+		
+ 
+//		// Go back to Home Page
+//		Thread.sleep(5000);
+//		driver.navigate().back();
+// 
+//		// Go forward to Registration page
+//		Thread.sleep(5000);
+//		driver.navigate().forward();
+//		 
+//		// Go back to Home page
+//		Thread.sleep(5000);
+//		driver.navigate().to(appUrl);
+//		
+// 
+//		// Refresh browser
+//		Thread.sleep(5000);
+//		driver.navigate().refresh();
+// 
+//		// Close browser
+//		driver.close();
+	}}

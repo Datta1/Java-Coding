@@ -1,0 +1,1050 @@
+package com.fiberlink.test.automation.setup;
+
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.lang.Thread.State;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
+import java.sql.Timestamp;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.Enumeration;
+import java.util.HashSet;
+import java.util.Hashtable;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Set;
+
+import org.apache.commons.io.FileDeleteStrategy;
+import org.apache.commons.io.FileUtils;
+import org.apache.log4j.Logger;
+
+import com.csvreader.CsvReader;
+import com.fiberlink.test.automation.pages.MasterPage;
+import com.fiberlink.test.automation.reports.RealTimeReporter;
+import com.fiberlink.test.automation.utilities.BaseEnrollment;
+import com.fiberlink.test.automation.utilities.BrowserDriver;
+import com.fiberlink.test.automation.utilities.DBConnection;
+import com.fiberlink.test.automation.utilities.GlobalVariables;
+import com.fiberlink.test.automation.utilities.GridRegistration;
+import com.fiberlink.test.automation.utilities.TestDataController;
+
+public class LaunchAutomation {
+	static Logger log = Logger.getLogger(LaunchAutomation.class.getName());
+
+	boolean batchReRun = false;
+
+	public String gridExecution = "false";
+
+	public String listOfSequentialWorkflows []={"basedata_workflow","cleanup_workflow"};
+
+	String startTime, endTime;
+	String teamName = null;
+	Thread[] threadPool = new Thread[1];
+	Class<?>[] classPool = new Class<?>[1];
+	String currentMappingFilePathEntry = null;
+	TestDataController testDataController = null;
+	ArrayList<String> preRequisiteTestCasesList = new ArrayList<String>();
+	List<List<String>> gridWorkFlowList = new LinkedList<List<String>>();
+	HashSet<String> workFlowNamesList = new HashSet<String>();
+
+	public static void main(String[] args) throws Exception {
+		LaunchAutomation launchAutomation = new LaunchAutomation();
+		launchAutomation.start(args);
+	}
+
+	public void start(String[] args) throws Exception {
+		FTARunConfig ftaRunConfig = null;
+		try {
+			LaunchAutomation launchAutomation = new LaunchAutomation();
+			File file = new File(".");
+			String baseDirPath = file.getCanonicalPath();
+			System.setProperty("baseDirPath", baseDirPath);				
+			if (args.length != 0 && args[0].equalsIgnoreCase("ReRun")) {
+				log.info("In If Block of LaunchAutomation Main");
+				FTARunConfig.envDetails.put("SequentialHubPortNumber", "4444");
+				FTARunConfig.envDetails.put("ParallelHubPortNumber", "5555");
+
+				ftaRunConfig = new FTARunConfig(batchReRun);
+				ftaRunConfig.execute();
+				File failedTests = new File(GlobalVariables.driverFolderPath + "failedTests.csv");
+				log.info("Failed.csv exists? " + failedTests.exists());
+				if (failedTests.exists()) { // This code is added because rerun
+					// should not be executed after basedata
+					// failure in 1st run
+					log.info("Failed.csv length :" + failedTests.length());
+					if (failedTests.length() > 0) {
+						launchAutomation.execute("failedTests.csv");
+						launchAutomation.logRerunStatus();
+					} else {
+						ftaRunConfig.getTotalExecutionTimeDiff();
+						System.exit(0);
+					}
+				}
+			} else {
+				log.info("In Else Block of LaunchAutomation Main");
+				ftaRunConfig = new FTARunConfig(batchReRun);
+				ftaRunConfig.getConfiguration();
+				launchAutomation.execute();
+
+				if (System.getProperty("os.name").contains("Windows")) {
+					List<String> cmdAndArgs = Arrays.asList("cmd", "/c", "kill_ChromeDriver.bat");
+					File dir = new File(System.getProperty("baseDirPath"));
+					ProcessBuilder pb = new ProcessBuilder(cmdAndArgs);
+					pb.directory(dir);
+					pb.start();
+				}
+			}
+			if (gridExecution.equalsIgnoreCase("true")) {
+				new GridRegistration().unregisterNodesAndStopHubs();
+			}
+			if (GlobalVariables.failedList.size() != 0 && args.length == 0) {
+				LaunchAutomation.generateFailedCsvFile();
+				file = new File(baseDirPath);
+				if (file.getCanonicalFile().getAbsolutePath().contains("Core")) {
+					baseDirPath = file.getCanonicalFile().getParent();
+				} else if (file.getCanonicalFile().getAbsolutePath().contains("Setup")) {
+					baseDirPath = file.getCanonicalFile().getParent();
+				} else {
+					baseDirPath = file.getCanonicalFile().getAbsolutePath();
+				}
+				File srcDir = new File(baseDirPath + "/Logs");
+				File targetDir = new File(baseDirPath + "/Temp/Logs");
+				FileUtils.copyDirectory(srcDir, targetDir);
+				log.info("Old reports copied to: " + baseDirPath + "/Temp/Logs");
+				if (batchReRun == false & FTARunConfig.envDetails.get("reRunStatus").equalsIgnoreCase("false")) {
+					log.info("Stopping the execution after rerun");
+					ftaRunConfig.getTotalExecutionTimeDiff();
+					System.exit(0);
+				} else {
+					log.info("Rerunning failed test cases...");
+					batchReRun = true;
+					workFlowNamesList.clear();
+					GlobalVariables.sequentialWorkFlowList.clear();
+					GlobalVariables.testCasesList.clear();
+					log.info("BeforeRerunning: " + System.getProperty("user.dir"));
+					System.setProperty("user.dir", baseDirPath);
+					log.info("Updated Now: " + System.getProperty("user.dir"));
+					String arguments[] = { "rerun" };
+					main(arguments);
+				}
+			} else {
+				ftaRunConfig.getTotalExecutionTimeDiff();
+				System.exit(0);
+			}
+
+		} catch (Exception e) {
+			ftaRunConfig.getTotalExecutionTimeDiff();
+			log.error(e);
+			throw new Exception(e);
+		}
+	}
+
+	/**
+	 * cleanLogOfFailedTestCases() method delete logs of failed test cases.
+	 * 
+	 * @throws Exception
+	 * 
+	 */
+	private void cleanLogOfFailedTestCases() throws Exception {
+		log.info("Deleteing failed tests files from Logs folder");
+		String baseDirPath = FTARunConfig.envDetails.get("baseDirPath");
+		File failedTests = new File(GlobalVariables.driverFolderPath + "failedTests.csv");
+		String line = null;
+		List<String> failedTestCaseslist = new ArrayList<String>();
+		List<String> failedTestCasesFileNames = new ArrayList<String>();
+		BufferedReader bufferedReader = new BufferedReader(new FileReader(failedTests));
+		while ((line = bufferedReader.readLine()) != null) {
+			String name = line.split(",")[1];
+			failedTestCaseslist.add(name);
+			String failedCsvFile = name + "_" + line.split(",")[0] + "Logs.csv";
+			String failedhtmFile = name + "_" + line.split(",")[0] + ".htm";
+			String failedImage = name + "_" + line.split(",")[0] + ".jpeg";
+			failedTestCasesFileNames.add(failedCsvFile);
+			failedTestCasesFileNames.add(failedhtmFile);
+			failedTestCasesFileNames.add(failedImage);
+		}
+		bufferedReader.close();
+		File folder = new File(baseDirPath + "Logs");
+		File[] listOfFiles = folder.listFiles();
+		for (File file : listOfFiles) {
+			if (file.isFile()) {
+				if (failedTestCasesFileNames.contains(file.getName())) {
+					file.delete();
+					log.info("Fail File Deleted = " + file.getName());
+				}
+			}
+		}
+	}
+
+	/**
+	 * @throws IOException
+	 * 
+	 */
+	private void logRerunStatus() throws IOException {
+		log.info("Writing Rerun Logs");
+		File failedTests = new File(GlobalVariables.driverFolderPath + "failedTests.csv");
+		File rerunLog = new File(GlobalVariables.driverFolderPath + "RerunLogs.csv");
+		rerunLog.createNewFile();
+		String line = null;
+		BufferedReader bufferedReader = new BufferedReader(new FileReader(failedTests));
+		BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(rerunLog, true));
+		while ((line = bufferedReader.readLine()) != null) {
+			if (GlobalVariables.failedList.contains(line)) {
+				bufferedWriter.append(line + ",Failed," + new Timestamp(new Date().getTime()) + "\n");
+			} else {
+				bufferedWriter.append(line + ",Passed," + new Timestamp(new Date().getTime()) + "\n");
+			}
+		}
+		bufferedReader.close();
+		bufferedWriter.close();
+
+	}
+
+	/**
+	 * @author sray
+	 * @throws IOException
+	 * 
+	 */
+	private static void generateFailedCsvFile() throws IOException {
+		File failedTests = new File(GlobalVariables.driverFolderPath + "failedTests.csv");
+		if (failedTests.exists()) {
+			FileUtils.forceDelete(failedTests);
+			// failedTests.delete();
+		}
+		failedTests.createNewFile();
+		FileWriter fileWriter = new FileWriter(failedTests);
+		fileWriter.flush();
+		fileWriter.write("");
+		for (String line : GlobalVariables.failedList) {
+			fileWriter.write(line + "\n");
+		}
+		fileWriter.close();
+	}
+
+	public void execute(String... driverFileName) throws Exception {
+		boolean lastTestCaseCrossed = false;
+
+		Class<?> cls = null;
+		Method meth = null;
+		FTARunConfig ftaRunConfig = new FTARunConfig(batchReRun);
+		ftaRunConfig.execute();
+
+		final SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
+
+		Date date1 = new Date();
+		log.info("Start Time: " + sdf.format(date1));
+		System.out.println(sdf.format(date1));
+
+		String baseDirPath = FTARunConfig.envDetails.get("baseDirPath");
+		gridExecution = FTARunConfig.envDetails.get("gridexecution");
+		if (batchReRun == false) {
+			File failedTests = new File(GlobalVariables.driverFolderPath + "failedTests.csv");
+			if (failedTests.exists()) {
+				FileUtils.forceDelete(failedTests);
+				log.info("FailedTests.csv deleted.");
+			}
+		}
+		String isReRun = FTARunConfig.envDetails.get("reRunStatus");
+		String isIntermediateReport = FTARunConfig.envDetails.get("intermediateReport");
+		teamName = FTARunConfig.envDetails.get("PlatForm_ENDTOEND").toLowerCase();
+		String classToExecute = "com.fiberlink.test.automation." + teamName + ".";
+
+		String existingTestScriptDetails[] = null;
+		String inputFileName = null;
+
+		if (driverFileName.length > 0) {
+			inputFileName = driverFileName[0];
+			cleanLogOfFailedTestCases();
+		} else {
+			inputFileName = FTARunConfig.envDetails.get("testDriverFile");
+		}
+		FTARunConfig.envDetails.put("isSingleTestCaseRun", "false");
+		FTARunConfig.envDetails.put("isEUPServiceEnabled", "false");
+
+		ThreadManager threadManager = new ThreadManager();
+		threadManager.start();
+
+		Date date = new Date();
+		FTARunConfig.envDetails.put("ExecuteonStartDateTime", sdf.format(date));
+
+		CsvReader workFlowNames = new CsvReader(GlobalVariables.driverFolderPath + inputFileName);
+		String params[] = { workFlowNames.get(0) };
+
+		DBConnection dbConnection = new DBConnection(baseDirPath);
+		CsvReader suiteReader = new CsvReader(GlobalVariables.driverFolderPath + inputFileName);
+		while(suiteReader.readRecord()) { 
+			String workFlowName = suiteReader.get(0);
+			String testScriptName = suiteReader.get(1);
+			if(null != testScriptName) {
+				if(0 != testScriptName.trim().length()) {
+					currentMappingFilePathEntry = workFlowName+","+testScriptName+",";
+					updateWorflowMapping(workFlowName, testScriptName);
+				} else {
+					ArrayList<String> listOfTestCases = dbConnection.getTestCasesOfWorkflow(workFlowName);
+					for(int cnt=0;cnt<listOfTestCases.size();cnt++) {
+						testScriptName = listOfTestCases.get(cnt);
+						currentMappingFilePathEntry = workFlowName+","+testScriptName+",";
+						updateWorflowMapping(workFlowName, testScriptName);
+					}
+				}
+			} 
+		}
+		suiteReader.close();
+
+		log.info("TotalTestCasesToBeExecuted: " + GlobalVariables.testCasesList.size() + " List: " + GlobalVariables.testCasesList.toString());
+		log.info("Total Sequential Test Cases: " + GlobalVariables.sequentialWorkFlowList.size() + " List: " + GlobalVariables.sequentialWorkFlowList.toString());
+		log.info("Total Grid Test Cases: " + gridWorkFlowList.size() + " List: " + gridWorkFlowList.toString());
+		log.info("Total PreRequisite Test Cases: " + preRequisiteTestCasesList.size() + " List: " + preRequisiteTestCasesList.toString());
+
+		if (preRequisiteTestCasesList.size() == 1 & GlobalVariables.testCasesList.size() == 0 & preRequisiteTestCasesList.contains("BaseData")) {
+			log.info("Marking Basedata running execution status flag as true if it is a single test script(BaseData) execution");
+			GlobalVariables.isSingleBaseDataScript = true;
+		}
+
+		log.info("Workflows: " + workFlowNamesList);
+		if (false==batchReRun && FTARunConfig.isLog4JConfigured) {
+			ftaRunConfig.updateTestPassSummaryFile();
+		}
+
+		cleanFailedTestCasesLogs(baseDirPath);
+
+		if (gridExecution.equalsIgnoreCase("false")) {
+			GlobalVariables.sequentialWorkFlowList.addAll(gridWorkFlowList);
+			gridWorkFlowList.clear();
+		}
+
+		// test cases to be executed sequentially
+		int status = 0;
+		// sequential execution iteration
+		SequentialExecution sequentialExecution = new SequentialExecution(GlobalVariables.sequentialWorkFlowList, baseDirPath, inputFileName, params, preRequisiteTestCasesList, batchReRun);
+		if (GlobalVariables.sequentialWorkFlowList.size() != 0) {
+			log.info("Sequential workflow started.");
+			try {
+				if (FTARunConfig.envDetails.get("pushResultsToDB").toLowerCase().contains("true")) {
+					startTime = new SimpleDateFormat("HH:mm:ss").format(Calendar.getInstance().getTime());
+					String runID = sdf.format(date).replace("/", "").replace(":", "");
+					String tcCount = String.valueOf(GlobalVariables.sequentialWorkFlowList.size());
+					String suiteName = inputFileName.substring(0, inputFileName.length() - 4);
+					RealTimeReporter realTimeReporter = new RealTimeReporter(runID, suiteName, tcCount, FTARunConfig.envDetails.get("build"), FTARunConfig.envDetails.get("PlatForm_ENDTOEND"), baseDirPath);
+					realTimeReporter.pushTestRunIdToDB();
+				}
+			} catch (Exception e) {
+			}
+
+			sequentialExecution.start();
+			do {
+				Thread.sleep(1000);
+			} while (sequentialExecution.isPrerequisiteCompleted == false);
+			status = sequentialExecution.status;
+		} else {
+			sequentialExecution.isSequentialWorkflowCompleted = true;
+		}
+
+		Thread.sleep(10000);
+
+		if (status != 1) {
+			log.info("Grid execution started.");
+			// test cases to be executed in grid / parallel
+			// grid execution iteration
+			int instanceNo = 0;
+			if (gridWorkFlowList.size() != 0) {
+
+				if (gridExecution.equalsIgnoreCase("true")) {
+					threadPool = new Thread[gridWorkFlowList.size()];
+					classPool = new Class<?>[gridWorkFlowList.size()];
+					instanceNo = 2;
+				} else {
+					threadPool = new Thread[1];
+					classPool = new Class<?>[1];
+				}
+
+				try {
+					int counter = 0; 
+					int previousMaxCounter = 0;
+					int cases = 0;
+
+					Iterator<List<String>> test = gridWorkFlowList.iterator();
+					while(test.hasNext()) {
+						List<String> list = test.next();
+						existingTestScriptDetails = list.get(0).split(",");
+						if (!existingTestScriptDetails[0].contains("OldUI")) {
+							if (!existingTestScriptDetails[0].contains("BaseData_WorkFlow") & existingTestScriptDetails[0].contains("_WorkFlow")) {
+								classToExecute = "com.fiberlink.test.automation." + teamName + ".";
+								classToExecute = classToExecute + existingTestScriptDetails[0].toLowerCase() + ".testscripts." + existingTestScriptDetails[1];
+							} else {
+								/* This condition is added to handle GRID execution flag*/
+								classToExecute = "com.fiberlink.test.automation." + teamName + ".";
+								classToExecute = classToExecute + existingTestScriptDetails[0].toLowerCase() + ".testscripts." + existingTestScriptDetails[1];
+							}
+							if (null != classToExecute & classToExecute.length() != 0) {
+								boolean groupAvailability = dbConnection.getParallelGroupNameAvailability(existingTestScriptDetails[1], existingTestScriptDetails[0], "seq");
+								if (groupAvailability) {
+
+									try {
+										cls = Class.forName(classToExecute);
+										meth = cls.getMethod("main", String[].class);
+										status = (Integer) meth.invoke(null, (Object) params);
+										if (status == 1) {
+											log.error("Test case : " + existingTestScriptDetails[1] + " failed");
+										}
+										
+									} catch (ClassNotFoundException e) {
+										log.error("SequentialExecution ClassNotFoundException", e);
+									} catch (Exception e) {
+										log.error("SequentialExecution Exception", e);
+									}
+								}
+							}
+						}
+					}
+
+					ArrayList<String> listOfParallelGroups = dbConnection.getDistinctParallelGroupName();
+					for (int groupIndex = 1; groupIndex <= listOfParallelGroups.size(); groupIndex++) {
+						previousMaxCounter = counter;
+						int startCounter = counter - cases;
+						cases = 0;
+						test = gridWorkFlowList.iterator();
+						while(test.hasNext()) {
+							List<String> list = test.next();
+							if (counter < gridWorkFlowList.size()) {
+								existingTestScriptDetails = list.get(0).split(",");
+							} else {
+								lastTestCaseCrossed = true;
+							}
+							if (!existingTestScriptDetails[0].contains("OldUI") && !lastTestCaseCrossed) {
+								if (!existingTestScriptDetails[0].contains("BaseData_WorkFlow") & existingTestScriptDetails[0].contains("_WorkFlow")) {
+									classToExecute = "com.fiberlink.test.automation." + teamName + ".";
+									classToExecute = classToExecute + existingTestScriptDetails[0].toLowerCase() + ".testscripts." + existingTestScriptDetails[1];
+								} else {
+									/* This condition is added to handle GRID execution flag*/
+									classToExecute = "com.fiberlink.test.automation." + teamName + ".";
+									classToExecute = classToExecute + existingTestScriptDetails[0].toLowerCase() + ".testscripts." + existingTestScriptDetails[1];
+								}
+								if (null != classToExecute & classToExecute.length() != 0) {
+									boolean groupAvailability = dbConnection.getParallelGroupNameAvailability(existingTestScriptDetails[1], existingTestScriptDetails[0], "p" + groupIndex);
+									if (groupAvailability) {
+										try {
+
+											if (groupIndex > 1) {
+												if (groupIndex > groupIndex - 1) {
+													for (int i = previousMaxCounter - 1; i >= startCounter; i--) {
+														Thread.State state = threadPool[i].getState();
+														System.out.println(state);
+														if (state.toString().equals("RUNNABLE")) {
+															synchronized (threadPool[i]) {
+																threadPool[i].join();
+															}
+														}
+													}
+													Class.forName(classToExecute);
+
+													classPool[counter] = Class.forName(classToExecute);
+													threadPool[counter] = new Thread((Runnable) classPool[counter].getConstructor(int.class).newInstance(instanceNo));
+													log.info("Test Script: " + existingTestScriptDetails[0] + " :: " + existingTestScriptDetails[1]);
+
+													threadPool[counter].setName("p" + groupIndex + "-" + counter);
+													
+													threadPool[counter].start();
+													counter++;
+													cases++;
+												} else {
+													Class.forName(classToExecute);
+
+													classPool[counter] = Class.forName(classToExecute);
+													threadPool[counter] = new Thread((Runnable) classPool[counter].getConstructor(int.class).newInstance(instanceNo));
+													log.info("Test Script: " + existingTestScriptDetails[0] + " :: " + existingTestScriptDetails[1]);
+
+													threadPool[counter].setName("p" + groupIndex + "-" + counter);
+													
+													threadPool[counter].start();
+													counter++;
+													cases++;
+												}
+											} else {
+												Class.forName(classToExecute);
+
+												classPool[counter] = Class.forName(classToExecute);
+												threadPool[counter] = new Thread((Runnable) classPool[counter].getConstructor(int.class).newInstance(instanceNo));
+												log.info("Test Script: " + existingTestScriptDetails[0] + " :: " + existingTestScriptDetails[1]);
+
+												threadPool[counter].setName("p" + groupIndex + "-" + counter);
+												
+												threadPool[counter].start();
+												counter++;
+												cases++;
+											}
+
+											instanceNo++;
+											if (BrowserDriver.browserName.equalsIgnoreCase("firefox")) {
+												GlobalVariables.threadTimings.put(existingTestScriptDetails[1], new Date().getTime());
+												GlobalVariables.threadDetails.put(existingTestScriptDetails[1], threadPool[counter]);
+											}
+
+										} catch (ClassNotFoundException e) {
+											log.error("GridExecution", e);
+										} catch (Exception e) {
+											log.error("GridExecution", e);
+										}
+									}
+								}
+							}
+							// Waiting for EUPService to get enabled
+							if (existingTestScriptDetails[1].contains("EndUserPortal_New_WorkFlow") || existingTestScriptDetails[1].contains("EndUserPortal_WorkFlow")) {
+								do {
+									if (FTARunConfig.envDetails.get("isEUPServiceEnabled").equalsIgnoreCase("false")) {
+										Thread.sleep(1000);
+									} else {
+										break;
+									}
+								} while (FTARunConfig.envDetails.get("isEUPServiceEnabled").equalsIgnoreCase("false"));
+							}
+						}
+					}
+
+
+					//							}
+					/* Waiting for Threads to join back */
+					counter = 0;
+					while (counter < threadPool.length) {
+						if (threadPool[counter] != null) {
+							threadPool[counter].join();
+							threadPool[counter] = null;
+						}
+						counter++;
+					}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+				}  catch (Exception e) {
+					log.error("GridExecution", e);
+					//						continue;
+				}
+
+			}
+		}
+		//		}
+		//		}
+
+		do {
+			Thread.sleep(1000);
+		} while (sequentialExecution.isSequentialWorkflowCompleted == false);
+		GlobalVariables.allTestCasesExecuted = true;
+
+		// Kill opened browser instances
+		MasterPage.killBrowserInstances();
+
+		final DateFormat sdf1 = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
+
+		Date date2 = new Date();
+		System.out.println(sdf1.format(date2));
+
+		log.info("End Time: " + sdf1.format(date2));
+
+		long diff = date2.getTime() - date1.getTime(); 
+		System.out.println("Difference: " + diff);
+		log.info("Difference: " + diff);
+
+
+		if ((isReRun.equals("false")) | (isReRun.equals("true") & batchReRun == true) | (isIntermediateReport.equals("true") & isReRun.equals("true")) | (sequentialExecution.isBaseDataFail == true)) {
+			// Finally execute the ReportController class
+			try {
+				Hashtable<String, String> configData = new Hashtable<String, String>();
+				testDataController = new TestDataController();
+				configData = testDataController.getPropertiesFileData(baseDirPath + "TestData/ConfigData.properties");
+				if (configData.get("isNormalExecution").equalsIgnoreCase("true")) {
+
+					try {
+						if (FTARunConfig.envDetails.get("pushResultsToDB").toLowerCase().contains("true")) {
+							endTime = new SimpleDateFormat("HH:mm:ss").format(Calendar.getInstance().getTime());
+							SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss");
+							Date startTimeStamp = format.parse(startTime);
+							Date endTimeStamp = format.parse(endTime);
+							long difference = endTimeStamp.getTime() - startTimeStamp.getTime();
+							RealTimeReporter realTimeReporter = new RealTimeReporter(baseDirPath);
+							realTimeReporter.updateRunIDStatusToDB(String.valueOf(difference));
+						}
+					} catch (Exception e) {
+					}
+					cls = Class.forName("com.fiberlink.test.automation.reports.ReportController");
+					meth = cls.getMethod("main", String[].class);
+					String[] reportParams = { String.valueOf(batchReRun), isReRun, };
+					meth.invoke(null, (Object) reportParams);
+				}
+				// System.exit(0);
+			} catch (ClassNotFoundException e) {
+				log.error("FinalReporting", e);
+			} catch (Exception e) {
+				log.error("FinalReporting", e);
+			}
+		}
+	}
+
+	public void cleanFailedTestCasesLogs(String baseDirPath) {
+		try {
+			if (FTARunConfig.isLog4JConfigured) {
+				if(batchReRun & FTARunConfig.envDetails.get("intermediateReport").equals("true")) {
+					File folder = new File(baseDirPath +"/Logs/");
+					for (File file : folder.listFiles()) {
+						String fileName = file.getName().split("\\.")[0].replace("Logs", "");
+						String extension = file.getName().split("\\.")[1].replace("_E2E", "");
+						try {
+							switch(extension) {
+							case "csv":
+								if(GlobalVariables.testCasesList.contains(fileName)){
+									log.info("Deleted: " + file.getName());
+									FileDeleteStrategy.FORCE.delete(file);
+								}
+								break;
+							case "htm":
+								if(GlobalVariables.testCasesList.contains(fileName)){
+									log.info("Deleted: " + file.getName());
+									FileDeleteStrategy.FORCE.delete(file);
+								}
+								break;
+							}
+						}catch(Exception e) {
+							log.error("FailedtoDelete: " , e);
+							continue;
+						}
+					}
+				}
+				System.out.println("Done");
+			}
+		} catch(Exception e) {
+			log.error("Failed to delete files: ", e);
+		}
+	}
+	public void updateWorflowMapping(String workFlowName, String testScriptName) {
+		GlobalVariables.testCasesList.add(testScriptName);
+		workFlowNamesList.add(workFlowName);
+		List<String> list = new ArrayList<String>();
+		list.add(currentMappingFilePathEntry);
+		if(gridExecution.equals("false")) {
+			GlobalVariables.sequentialWorkFlowList.add(list);
+		} else {
+			if(Arrays.asList(listOfSequentialWorkflows).contains(workFlowName.toLowerCase())) {
+				GlobalVariables.sequentialWorkFlowList.add(list);
+			} else {
+				if(workFlowName.equalsIgnoreCase("docmanagement_workflow")) {
+					if (BaseEnrollment.isForMaintainedCustomer) {
+						GlobalVariables.sequentialWorkFlowList.add(list);
+					} else {
+						gridWorkFlowList.add(list);
+					}
+				} else {
+					gridWorkFlowList.add(list);
+				}
+			}
+		}
+		if (workFlowName.equalsIgnoreCase("basedata_workflow") & testScriptName.equalsIgnoreCase("BaseData")) {
+			preRequisiteTestCasesList.add("BaseData");
+		}
+	}
+}
+
+class SequentialExecution implements Runnable {
+	static Logger log = Logger.getLogger(SequentialExecution.class.getName());
+
+	int status = 0;
+	int winWPStatus = 0;
+	int winDTMStatus = 0;
+	int winWin10Status = 0;
+	int secondLastTestCaseIndex = 0;
+
+	boolean isBaseDataFail = false;
+	boolean isPrerequisiteCompleted = false;
+	boolean isSequentialWorkflowCompleted = false;
+
+	Set<String> sequentialWorkFlows = new HashSet<String>();
+	ArrayList<String> preRequisiteTestCasesList = new ArrayList<String>();
+	List<List<String>> sequentialWorkFlowList = new LinkedList<List<String>>();
+
+	String params[] = null;
+	String suiteName = null;
+	String baseDirPath = null;
+	String classToExecute = null;
+	String currentTestScriptDetails[];
+
+	boolean batchReRun = false;
+
+	Thread thread;	
+	Method meth = null;
+	Class<?> cls = null;
+
+	public SequentialExecution(List<List<String>> sequentialWorkflowList, String baseDirPath, String suiteName, String params[], ArrayList<String> preRequisiteTestCasesList, boolean batchReRun) {
+		this.sequentialWorkFlowList = sequentialWorkflowList;
+		this.baseDirPath = baseDirPath;
+		this.suiteName = suiteName;
+		this.params = params;
+		this.preRequisiteTestCasesList = preRequisiteTestCasesList;
+		this.batchReRun = batchReRun;
+		if(0 == preRequisiteTestCasesList.size()) {
+			isPrerequisiteCompleted = true;
+		}
+	}
+
+	public void start() {
+		if (thread == null) {
+			thread = new Thread(this, "SequentialExecution");
+			thread.start();
+		}
+	}
+
+	@Override
+	public void run() {
+		try {
+			int skipTestCase = 0;
+			// outer loop to fetch work flows names and count
+			for (int workFlowIndex = 0; workFlowIndex < sequentialWorkFlowList.size(); workFlowIndex++) {
+				boolean sequentialWorkFlowCompleted = false;
+				if (!sequentialWorkFlowCompleted) {
+					secondLastTestCaseIndex = sequentialWorkFlowList.get(workFlowIndex).size() - 1;
+					// inner loop to iterate through test cases from each work
+					// flow
+					for (int testCasesIndex = 0; testCasesIndex < sequentialWorkFlowList.get(workFlowIndex).size(); testCasesIndex++) {
+						classToExecute = "com.fiberlink.test.automation." + FTARunConfig.envDetails.get("PlatForm_ENDTOEND").toLowerCase() + ".";
+						try {
+							// invoke test cases through reflection
+							currentTestScriptDetails = sequentialWorkFlowList.get(workFlowIndex).get(testCasesIndex).split(",");
+							log.info("Current TestScriptDetails : " + currentTestScriptDetails[1].toString());
+							if (currentTestScriptDetails[0].equalsIgnoreCase("BaseData_WorkFlow")) {
+								classToExecute = "com.fiberlink.test.automation.";
+								classToExecute = classToExecute + "testscripts." + currentTestScriptDetails[1];
+							} else if (currentTestScriptDetails[1].equals("DeleteAllAppDocPolicyAndRule")) {
+								classToExecute = "com.fiberlink.test.automation.";
+								classToExecute = classToExecute + "testscripts." + currentTestScriptDetails[1];
+							} else if (currentTestScriptDetails[0].equals("AppManagementDeactivate_WorkFlow"))
+								classToExecute = classToExecute + "AppManagement_WorkFlow" + ".testscripts." + currentTestScriptDetails[1];
+							else if (currentTestScriptDetails[0].equals("MasterAdminPreReq_WorkFlow"))
+								classToExecute = classToExecute + "MasterAdmin_WorkFlow" + ".testscripts." + currentTestScriptDetails[1];
+							else if (currentTestScriptDetails[0].equals("LocalizationPreReq_WorkFlow"))
+								classToExecute = classToExecute + "Localization_WorkFlow" + ".testscripts." + currentTestScriptDetails[1];
+							else if (currentTestScriptDetails[0].equals("UserManagementSequential_PFQA_WorkFlow"))
+								classToExecute = classToExecute + "UserManagement_PFQA_WorkFlow" + ".testscripts." + currentTestScriptDetails[1];
+							else if (currentTestScriptDetails[1].equals("CleanUpScriptForSuitWindows_E2E"))
+								classToExecute = classToExecute + "testscripts.CleanUpScriptForSuitWindows_E2E";
+							else if (currentTestScriptDetails[1].equals("CleanUpScriptForWindowsMDM_LaptopE2E"))
+								classToExecute = classToExecute + "testscripts.CleanUpScriptForWindowsMDM_LaptopE2E";
+							else if (currentTestScriptDetails[1].equals("STO13991_MacEnrollment_OSX"))
+								classToExecute = classToExecute + "endtoend_osx_applescript_workflow.testscripts.STO13991_MacEnrollment_OSX";
+							else if (sequentialWorkFlows.contains(currentTestScriptDetails[0]))
+								classToExecute = classToExecute + currentTestScriptDetails[0].toLowerCase() + ".testscripts." + currentTestScriptDetails[1];
+							else {
+								classToExecute = classToExecute + currentTestScriptDetails[0].toLowerCase() + ".testscripts." + currentTestScriptDetails[1];
+							}
+							cls = Class.forName(classToExecute);
+
+							FTARunConfig.envDetails.put("SequentialTestCaseName", currentTestScriptDetails[1]);
+							try {
+								if (FTARunConfig.envDetails.get("pushResultsToDB").toLowerCase().contains("true")) {
+									RealTimeReporter realTimeReporter = new RealTimeReporter(baseDirPath);
+
+									realTimeReporter.pushNewTCToResultsDB(currentTestScriptDetails[1]);
+								}
+							} catch (Exception e) {
+							}
+							// if test case is BaseData
+							if (currentTestScriptDetails[1].equals("BaseData") || currentTestScriptDetails[1].equals("BaseData_E2E") || currentTestScriptDetails[1].equals("STO_4145_Enroll_Windows_Device_MDM_E2E") || currentTestScriptDetails[1].equals("BaseData_AR")
+									|| currentTestScriptDetails[1].equals("STO_25680_Enroll_Windows_10_Laptop_Passcode_E2E") || currentTestScriptDetails[1].equals("STO_37911_Enroll_Windows10_DTM_E2E")) {
+								if (FTARunConfig.envDetails.get("useExistingCustomerAR").equalsIgnoreCase("true") && currentTestScriptDetails[1].equals("BaseData_AR")) {
+									log.info("Here - " + FTARunConfig.envDetails.get("useExistingCustomerAR"));
+									log.info("Using existing customers. Hence we will not execute the BaseData");
+									continue;
+								}
+								log.info("BaseData is Running.");
+								meth = cls.getMethod("executeMain", String[].class);
+
+								if (currentTestScriptDetails[1].equals("BaseData_E2E")
+										|| (currentTestScriptDetails[1].equals("STO_4145_Enroll_Windows_Device_MDM_E2E") && (FTARunConfig.envDetails.get("testDriverFile").contains("Windows_Confidence_e2eSuite") || FTARunConfig.envDetails.get("testDriverFile").contains("WP_Sanity_e2eSuite")))
+										|| currentTestScriptDetails[1].equals("BaseData_AR") || (currentTestScriptDetails[1].equals("STO_25680_Enroll_Windows_10_Laptop_Passcode_E2E") && FTARunConfig.envDetails.get("testDriverFile").contains("WindowsMDMLaptop_e2eSuite"))
+										|| (currentTestScriptDetails[1].equals("STO_37911_Enroll_Windows10_DTM_E2E") && FTARunConfig.envDetails.get("testDriverFile").contains("WindowsDTM_e2eSuite"))) {
+									Constructor<?> constructor = cls.getConstructor(int.class);
+									status = (Integer) meth.invoke(constructor.newInstance(1), (Object) params);
+									log.info("Executing.");
+								} else if (currentTestScriptDetails[1].equals("STO_4145_Enroll_Windows_Device_MDM_E2E")) {
+									Constructor<?> constructor = cls.getConstructor(int.class);
+									winWPStatus = (Integer) meth.invoke(constructor.newInstance(1), (Object) params);
+									log.info("Executing.");
+								} else if (currentTestScriptDetails[1].equals("STO_25680_Enroll_Windows_10_Laptop_Passcode_E2E")) {
+									Constructor<?> constructor = cls.getConstructor(int.class);
+									winWin10Status = (Integer) meth.invoke(constructor.newInstance(1), (Object) params);
+									log.info("Executing.");
+								} else if (currentTestScriptDetails[1].equals("STO_37911_Enroll_Windows10_DTM_E2E")) {
+									Constructor<?> constructor = cls.getConstructor(int.class);
+									winDTMStatus = (Integer) meth.invoke(constructor.newInstance(1), (Object) params);
+									log.info("Executing.");
+								} else {
+									Constructor<?> constructor = cls.getConstructor(String.class);
+									status = (Integer) meth.invoke(constructor.newInstance(baseDirPath), (Object) params);
+								}
+								if (status == 1) {
+									log.info("BaseDataFailed.");
+									log.error("BaseDataFailed.");
+									isBaseDataFail = true;
+									break;
+								}
+								// if test case is
+								// STO_32499_WP_PIM_Email_Config_E2E in new PIM
+								// Suite
+							} else if ((currentTestScriptDetails[0].toLowerCase().equals("wp_confidence_suite_workflow") || currentTestScriptDetails[0].toLowerCase().equals("windows_app_regression_workflow") || currentTestScriptDetails[0].toLowerCase().equals("windows_deviceview_workflow")
+									|| currentTestScriptDetails[0].toLowerCase().equals("windows_deviceactions_workflow") || currentTestScriptDetails[0].toLowerCase().equals("windows_rules_workflow") || currentTestScriptDetails[0].toLowerCase().equals("windows_policy_workflow")
+									|| currentTestScriptDetails[1].equals("Windows_sanity_45mins_E2E")) && winWPStatus == 1) {
+								continue;
+							} else if ((currentTestScriptDetails[0].toLowerCase().equals("win10mdm_confidence_suite_workflow") || currentTestScriptDetails[1].equals("CleanupScript_Win10MDM_E2E")) && winWin10Status == 1) {
+								continue;
+							} else if (currentTestScriptDetails[0].toLowerCase().equals("windtm_confidence_suite_workflow") && winDTMStatus == 1) {
+								continue;
+							} else if (currentTestScriptDetails[1].equals("STO_32499_WP_PIM_Email_Config_E2E") && FTARunConfig.envDetails.get("testDriverFile").contains("PIM")) {
+
+								log.info("STO_32499_WP_PIM_Email_Config_E2E Running.");
+								meth = cls.getMethod("executeMain", String[].class);
+
+								if (currentTestScriptDetails[1].equals("STO_32499_WP_PIM_Email_Config_E2E")) {
+									Constructor<?> constructor = cls.getConstructor(int.class);
+									status = (Integer) meth.invoke(constructor.newInstance(0), (Object) params);
+									log.info("Executing STO_32499_WP_PIM_Email_Config_E2E.");
+								} else {
+									Constructor<?> constructor = cls.getConstructor(String.class);
+									status = (Integer) meth.invoke(constructor.newInstance(baseDirPath), (Object) params);
+								}
+								if (status == 1) {
+									log.info("STO_32499_WP_PIM_Email_Config_E2E from WinPIM_e2eSuite failed.");
+									log.error("STO_32499_WP_PIM_Email_Config_E2E from WinPIM_e2eSuite failed.");
+									break;
+								}
+							} else if ((currentTestScriptDetails[1].equals("Part1_PersonaSetupForWP") && FTARunConfig.envDetails.get("testDriverFile").contains("Windows_Confidence_e2eSuite"))
+									|| (currentTestScriptDetails[1].equals("STO_32500_WP_Secure_Browser_Config_E2E") && FTARunConfig.envDetails.get("testDriverFile").contains("Windows_Confidence_e2eSuite"))
+									|| (currentTestScriptDetails[1].equals("STO_32499_WP_PIM_Email_Config_E2E") && FTARunConfig.envDetails.get("testDriverFile").contains("Windows_Confidence_e2eSuite"))) {
+
+								log.info("Part1_PersonaSetupForWP Running.");
+								meth = cls.getMethod("executeMain", String[].class);
+								if (skipTestCase == 1 && currentTestScriptDetails[1].equals("STO_32499_WP_PIM_Email_Config_E2E")) {
+									continue;
+								} else if (skipTestCase == 1 && currentTestScriptDetails[1].equals("STO_32500_WP_Secure_Browser_Config_E2E")) {
+									continue;
+								}
+								if (currentTestScriptDetails[1].equals("Part1_PersonaSetupForWP") || currentTestScriptDetails[1].equals("STO_32499_WP_PIM_Email_Config_E2E") || currentTestScriptDetails[1].equals("STO_32500_WP_Secure_Browser_Config_E2E")) {
+									Constructor<?> constructor = cls.getConstructor(int.class);
+									status = (Integer) meth.invoke(constructor.newInstance(0), (Object) params);
+									log.info("Executing Part1_PersonaSetupForWP.");
+								} else {
+									Constructor<?> constructor = cls.getConstructor(String.class);
+									status = (Integer) meth.invoke(constructor.newInstance(baseDirPath), (Object) params);
+								}
+								if (status == 1) {
+									log.info("Part1_PersonaSetupForWP from Windows Confidence suite failed.");
+									if ((currentTestScriptDetails[1].equals("Part1_PersonaSetupForWP") && FTARunConfig.envDetails.get("testDriverFile").contains("Confidence"))
+											|| (currentTestScriptDetails[1].equals("STO_32500_WP_Secure_Browser_Config_E2E") && FTARunConfig.envDetails.get("testDriverFile").contains("Confidence"))
+											|| (currentTestScriptDetails[1].equals("STO_32499_WP_PIM_Email_Config_E2E") && FTARunConfig.envDetails.get("testDriverFile").contains("Confidence"))) {
+
+										if ((currentTestScriptDetails[1].equals("Part1_PersonaSetupForWP") && FTARunConfig.envDetails.get("testDriverFile").contains("Confidence"))) {
+											skipTestCase = 1;
+										}
+										continue;
+									}
+									log.error("Part1_PersonaSetupForWP from Windows Confidence suite failed.");
+									break;
+								}
+							} else if (currentTestScriptDetails[1].equals("STO13991_MacEnrollment_OSX")) {
+
+								log.info("STO13991_MacEnrollment_OSX Running.");
+								meth = cls.getMethod("executeMain", String[].class);
+
+								if (currentTestScriptDetails[1].equals("STO13991_MacEnrollment_OSX")) {
+									Constructor<?> constructor = cls.getConstructor(int.class);
+									status = (Integer) meth.invoke(constructor.newInstance(0), (Object) params);
+									log.info("Executing STO13991_MacEnrollment_OSX.");
+								} else {
+									Constructor<?> constructor = cls.getConstructor(String.class);
+									status = (Integer) meth.invoke(constructor.newInstance(baseDirPath), (Object) params);
+								}
+								if (status == 1) {
+									log.info("STO13991_MacEnrollment_OSX failed.");
+									log.error("STO13991_MacEnrollment_OSX failed.");
+									break;
+								}
+							} else if (currentTestScriptDetails[1].equals("STO13991_MacEnrollment_EnterpriseAppPushOnly_OSX")) {
+
+								log.info("STO13991_MacEnrollment_EnterpriseAppPushOnly_OSX Running.");
+								meth = cls.getMethod("executeMain", String[].class);
+
+								if (currentTestScriptDetails[1].equals("STO13991_MacEnrollment_EnterpriseAppPushOnly_OSX")) {
+									Constructor<?> constructor = cls.getConstructor(int.class);
+									status = (Integer) meth.invoke(constructor.newInstance(0), (Object) params);
+									log.info("Executing STO13991_MacEnrollment_EnterpriseAppPushOnly_OSX.");
+								} else {
+									Constructor<?> constructor = cls.getConstructor(String.class);
+									status = (Integer) meth.invoke(constructor.newInstance(baseDirPath), (Object) params);
+								}
+								if (status == 1) {
+									log.info("STO13991_MacEnrollment_EnterpriseAppPushOnly_OSX failed.");
+									log.error("STO13991_MacEnrollment_EnterpriseAppPushOnly_OSX failed.");
+									break;
+								}
+							}else if (currentTestScriptDetails[1].equals("STO66223_MacPackager_LoginValidation_OSX_E2E")) {
+
+								log.info("STO66223_MacPackager_LoginValidation_OSX_E2E Running.");
+								meth = cls.getMethod("executeMain", String[].class);
+
+								if (currentTestScriptDetails[1].equals("STO66223_MacPackager_LoginValidation_OSX_E2E")) {
+									Constructor<?> constructor = cls.getConstructor(int.class);
+									status = (Integer) meth.invoke(constructor.newInstance(0), (Object) params);
+									log.info("Executing STO66223_MacPackager_LoginValidation_OSX_E2E.");
+								} else {
+									Constructor<?> constructor = cls.getConstructor(String.class);
+									status = (Integer) meth.invoke(constructor.newInstance(baseDirPath), (Object) params);
+								}
+								if (status == 1) {
+									log.info("STO66223_MacPackager_LoginValidation_OSX_E2E failed.");
+									log.error("STO66223_MacPackager_LoginValidation_OSX_E2E failed.");
+									break;
+								}
+							} else {
+								log.info("Test Case Running: " + classToExecute);
+								meth = cls.getMethod("main", String[].class);
+								if (classToExecute.contains("Perf_")) {
+									for (int tc_itn = 0; tc_itn < Integer.parseInt(new TestDataController().getPerformanceConfigData(baseDirPath).get("TESTCASE_ITERATIONS")); tc_itn++) {
+										meth.invoke(null, (Object) params);
+									}
+								} else {
+									meth.invoke(null, (Object) params);
+									if(suiteName.equalsIgnoreCase("AndroidSanity_e2eSuite.csv") && currentTestScriptDetails[1].equalsIgnoreCase("STO_EnrollDevice_Android_E2E_Passcode") && 0 == testCasesIndex) {
+										DBConnection dbConnection = new DBConnection(baseDirPath);
+										dbConnection.connect();
+										status = dbConnection.getTestCaseExecutionCount(currentTestScriptDetails[1]).get(2);	
+										DBConnection.closeDBConnection();
+										if(1==status) {
+											sequentialWorkFlowCompleted = true;
+											isPrerequisiteCompleted = true;
+											break;
+										}
+									}
+								}
+								if (testCasesIndex == secondLastTestCaseIndex) {
+									sequentialWorkFlowCompleted = true;
+								}
+							}
+							if (preRequisiteTestCasesList.contains(currentTestScriptDetails[1])) {
+								preRequisiteTestCasesList.remove(currentTestScriptDetails[1]);
+							}
+						} catch (ClassNotFoundException e) {
+							log.error("SequentialExecution", e);
+						} catch (Exception e) {
+							log.error("SequentialExecution", e);
+						} finally {
+							if (false == batchReRun) {
+								if (0 == preRequisiteTestCasesList.size()) {
+									isPrerequisiteCompleted = true;
+								}
+							}
+						}
+					}
+					if (status == 1) {
+						break;
+					}
+				}
+			}
+		} catch (Exception e) {
+			log.error("SequentialExecutionOuterCatchBlock", e);
+		} finally {
+			isSequentialWorkflowCompleted = true;
+			isPrerequisiteCompleted = true;
+		}
+	}
+
+}
+
+class ThreadManager implements Runnable {
+	private Thread t, threadToCheck;
+	ArrayList<String> threadList = new ArrayList<String>();
+	static Logger log = Logger.getLogger(ThreadManager.class.getName());
+
+	int waitTime = 15;
+
+	@Override
+	public void run() {
+		do {
+			updateThreadList();
+			for (int cnt = 0; cnt < threadList.size(); cnt++) {
+				String scriptName = threadList.get(cnt);
+				if (GlobalVariables.threadTimings.containsKey(scriptName)) {
+					threadToCheck = GlobalVariables.threadDetails.get(scriptName);
+					long startTime = GlobalVariables.threadTimings.get(scriptName);
+					long endTime = new Date().getTime();
+					long diff = endTime - startTime;
+					long diffMinutes = diff / (60 * 1000) % 60;
+					State threadState = threadToCheck.getState();
+					synchronized (this) {
+						if (diffMinutes >= waitTime || threadState.equals(Thread.State.TERMINATED)) {
+							StackTraceElement stackTraceElement[] = threadToCheck.getStackTrace();
+							log.error("-------------------------------------Message------------------------------------------------------------");
+							for (StackTraceElement st : stackTraceElement) {
+								log.error(st.toString());
+							}
+							log.error("-------------------------------------Message------------------------------------------------------------");
+							if (threadState.equals(Thread.State.BLOCKED) || threadState.equals(Thread.State.TIMED_WAITING) || threadState.equals(Thread.State.WAITING) || threadState.equals(Thread.State.RUNNABLE)) {
+								GlobalVariables.running = false;
+								log.info("Done stopping thread.");
+								if (!threadToCheck.isAlive()) {
+									threadList.remove(cnt);
+									GlobalVariables.threadTimings.remove(scriptName);
+									GlobalVariables.threadDetails.remove(scriptName);
+									GlobalVariables.running = true;
+								} else {
+									threadToCheck.interrupt();
+									waitTime = waitTime + 1;
+								}
+							} else if (threadState.equals(Thread.State.TERMINATED)) {
+								threadList.remove(cnt);
+								GlobalVariables.threadTimings.remove(scriptName);
+								GlobalVariables.threadDetails.remove(scriptName);
+							}
+						}
+						try {
+							Thread.sleep(1000);
+						} catch (InterruptedException e) {
+						}
+						updateThreadList();
+					}
+				}
+			}
+		} while (GlobalVariables.allTestCasesExecuted == false);
+	}
+
+	public void updateThreadList() {
+		Enumeration<String> enumeration = GlobalVariables.threadTimings.keys();
+		while (enumeration.hasMoreElements()) {
+			threadList.add(enumeration.nextElement());
+		}
+	}
+
+	public void start() {
+		if (t == null) {
+			t = new Thread(this, "ThreadManager");
+			t.start();
+		}
+	}
+}

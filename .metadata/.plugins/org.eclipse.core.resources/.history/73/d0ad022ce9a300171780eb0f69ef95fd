@@ -1,0 +1,77 @@
+import org.openqa.selenium.By;
+import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.support.ui.Select;
+
+public class Driver_basic_details {
+
+	public static void main(String[] args) throws InterruptedException {
+		// TODO Auto-generated method stub
+		
+		// launch url chrome 
+		System.setProperty ("webdriver.chrome.driver" , "C:\\Users\\DattaKolekar\\Desktop\\eclipeseAndJava\\chromedriver.exe" );
+		ChromeDriver driver = new ChromeDriver();
+		driver.get("https://porter.in/");
+		driver.manage().window().maximize();
+		
+		// enter phone number 
+		driver.findElement(By.id("id")).sendKeys("Driver Name");
+		
+		// enter 10 digit mobile number
+		driver.findElement(By.id("id_")).sendKeys("12345767890");
+		
+		//enter the 
+		driver.findElement(By.id("id")).sendKeys("secondry txtPhoneNumber");
+		
+		// select region 
+		Select region = new Select(driver.findElement(By.name("region dropdown id")));
+		region.selectByIndex(3);
+		 
+		// select vehicle categeory
+		Select category = new Select(driver.findElement(By.name("vahicle category id")));
+		category.selectByIndex(3);
+		 
+		// select vehicle number, Enter value in all four boxes.
+		driver.findElement(By.id("id")).sendKeys("MH");
+		driver.findElement(By.id("id")).sendKeys("01");
+		
+		driver.findElement(By.id("id")).sendKeys("PJ");
+		driver.findElement(By.id("id")).sendKeys("2020");
+		
+		// enter shift start time or 
+		driver.findElement(By.id("id")).sendKeys("9:00 AM");
+		
+		// Select shift hours.
+		Select shift = new Select(driver.findElement(By.name("vahicle category id")));
+		shift.selectByIndex(1);
+		
+		// enter driver language
+		driver.findElement(By.id("id")).sendKeys("English");
+		
+		// select date of joining, assuming from calender.
+		 driver.findElement(By.xpath("//form//input[@name='pickupdaytime']")).sendKeys("09252017");
+
+	     // Radio Button
+		 driver.findElement(By.id("id")).click();
+	        
+		 // select how did you hear about us 
+		 Select source = new Select(driver.findElement(By.name("website")));
+		 source.selectByIndex(4);
+		 
+		 // select sim type
+		 Select simtype = new Select(driver.findElement(By.name("prepaid")));
+		 simtype.selectByIndex(2);
+		 
+		 // select sim provider
+		 Select simprovider = new Select(driver.findElement(By.name("sim provider")));
+		 simprovider.selectByIndex(4);
+		 
+		 
+		 
+		
+		
+		
+		
+
+	}
+
+}

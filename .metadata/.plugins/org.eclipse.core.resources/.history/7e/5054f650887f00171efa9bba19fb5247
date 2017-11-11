@@ -1,0 +1,21 @@
+package Saturday;
+
+public class UserDefineArrayList {
+int a ;
+int b;
+
+ UserDefineArrayList(int a,int b) {
+	 this.a=a;
+	 this.b=b;
+	 
+	// TODO Auto-generated constructor stub
+}
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+		
+		
+
+	}
+
+
+}

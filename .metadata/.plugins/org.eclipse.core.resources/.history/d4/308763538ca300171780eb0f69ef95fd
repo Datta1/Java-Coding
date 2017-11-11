@@ -1,0 +1,49 @@
+import org.openqa.selenium.By;
+import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.support.ui.Select;
+
+public class Driver_basic_details {
+
+	public static void main(String[] args) throws InterruptedException {
+		// TODO Auto-generated method stub
+		
+		//step 1 : launch url chrome 
+		System.setProperty ("webdriver.chrome.driver" , "C:\\Users\\DattaKolekar\\Desktop\\eclipeseAndJava\\chromedriver.exe" );
+		ChromeDriver driver = new ChromeDriver();
+		driver.get("https://porter.in/");
+		driver.manage().window().maximize();
+		
+		driver.findElement(By.id("id")).sendKeys("Driver Name");
+		driver.findElement(By.id("id")).sendKeys("12345767890");
+		driver.findElement(By.id("id")).sendKeys("secondry txtPhoneNumber");
+		
+		// step 2 : select region 
+		Select region = new Select(driver.findElement(By.name("region dropdown id")));
+		region.selectByIndex(3);
+		 
+		//select vehicle categeory
+		Select category = new Select(driver.findElement(By.name("vahicle category id")));
+		category.selectByIndex(3);
+		 
+		//select vehicle number, Enter value in all four boxes.
+		driver.findElement(By.id("id")).sendKeys("MH");
+		driver.findElement(By.id("id")).sendKeys("01");
+		
+		driver.findElement(By.id("id")).sendKeys("PJ");
+		driver.findElement(By.id("id")).sendKeys("2020");
+		
+		//enter shift start time 
+		driver.findElement(By.id("id")).sendKeys("9:00 AM");
+		
+		//Select shift hours.
+		Select shift = new Select(driver.findElement(By.name("vahicle category id")));
+		shift.selectByIndex(1);
+		 
+		
+		
+		
+		
+
+	}
+
+}
